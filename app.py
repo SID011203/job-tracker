@@ -1,13 +1,21 @@
 from flask import Flask, render_template, request, redirect, flash
 import os
 import psycopg2
+from urllib.parse import urlparse
 
 app = Flask(__name__)
 app.secret_key = "jobtracker123"
 
 # Function to get DB connection
 def get_db():
-    conn = psycopg2.connect(os.environ.get("DATABASE_URL"))
+    url = urlparse(os.environ.get("DATABASE_URL"))
+    conn = psycopg2.connect(
+        dbname=url.path[1:],  # skip the leading '/'
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
     return conn
 
 # ----------------- Home / View Applications -----------------
@@ -44,9 +52,9 @@ def add():
 @app.route("/update/<int:id>", methods=["GET", "POST"])
 def update(id):
     db = get_db()
-    cur = db.cursor
+    cur = db.cursor()
 
-    cur.execute("SELECT * FROM applications WHERE id=%s",(id))
+    cur.execute("SELECT * FROM applications WHERE id=%s",(id,))
     app_data = cur.fetchone()
 
     if request.method == "POST":
@@ -66,8 +74,12 @@ def update(id):
 @app.route("/delete/<int:id>")
 def delete(id):
     db = get_db()
-    db.execute("DELETE FROM applications WHERE id= ?", (id,))
+    cur = db.cursor()
+    
+    cur.execute("DELETE FROM applications WHERE id= %s", (id,))
     db.commit()
+
+    cur.close()
     db.close()
 
     flash("Application deleted","danger")
